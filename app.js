@@ -248,17 +248,44 @@
       const img = new Image(); img.alt = f.name; setImg(img, f, 2400); body.appendChild(img);
     } else if (f.src) {
       const v = document.createElement('video'); v.src = f.src; v.controls = true; v.style.maxHeight = '100%'; v.style.maxWidth = '100%'; body.appendChild(v);
+    } else if (state.lbPlayer === 'drive' || f.noNative) {
+      mountDriveFrame(f, body);
     } else {
-      const fr = document.createElement('iframe');
-      fr.src = `https://drive.google.com/file/d/${f.id}/preview`;
-      fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true;
-      if (f.h > f.w) fr.classList.add('portrait');
-      body.appendChild(fr);
+      mountNativeVideo(f, body);
     }
+    const alt = $('#lbAltPlayer');
+    alt.hidden = !(f.type === 'video' && !f.src && !f.noNative);
+    alt.textContent = state.lbPlayer === 'drive' ? '改用手機內建播放器' : '改用 Google 播放器';
     const list = visibleList(), pos = list.indexOf(state.lb);
     $('#lbCaption').textContent = `${pos + 1} / ${list.length}　${fmtDate(f)}${f.by ? '　📷 ' + f.by : ''}${f.type === 'video' ? '　（剛上傳的影片需數分鐘處理才能播放）' : ''}`;
     $('#lbDownload').href = f.src || `https://drive.google.com/uc?export=download&id=${f.id}`;
     $('#lbPrev').disabled = pos <= 0; $('#lbNext').disabled = pos >= list.length - 1;
+  }
+  // Google 雲端播放器（後備）：控制列由 Google 決定，無法調整
+  function mountDriveFrame(f, body) {
+    body.innerHTML = '';
+    const fr = document.createElement('iframe');
+    fr.src = `https://drive.google.com/file/d/${f.id}/preview`;
+    fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true;
+    if (f.h > f.w) fr.classList.add('portrait');
+    body.appendChild(fr);
+  }
+  // 手機內建播放器：直接串流原檔，控制列會自動隱藏、可原生全螢幕；播不了就自動改用 Google 播放器
+  function mountNativeVideo(f, body) {
+    const v = document.createElement('video');
+    v.controls = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'metadata';
+    v.poster = urlB(f, 1280);
+    v.src = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(f.id)}&export=download&confirm=t`;
+    let settled = false;
+    const fallback = () => {
+      if (settled || !v.isConnected) return;
+      settled = true; f.noNative = true;
+      $('#lbAltPlayer').hidden = true;
+      mountDriveFrame(f, body);
+    };
+    v.addEventListener('error', fallback);
+    v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) fallback(); else settled = true; });
+    body.appendChild(v);
   }
   function lbStep(d) {
     const list = visibleList(), pos = list.indexOf(state.lb), np = pos + d;
@@ -455,6 +482,10 @@
   $('#lbClose').addEventListener('click', closeLightbox);
   $('#lbPrev').addEventListener('click', () => lbStep(-1));
   $('#lbNext').addEventListener('click', () => lbStep(1));
+  $('#lbAltPlayer').addEventListener('click', () => {
+    state.lbPlayer = state.lbPlayer === 'drive' ? 'native' : 'drive';
+    renderLightbox();
+  });
   $('#lbToBook').addEventListener('click', () => {
     const i = state.lb; closeLightbox(); closeOverlay('#gridView');
     if (!$('#album').classList.contains('active')) showAlbum();
@@ -462,7 +493,7 @@
   });
   // 大圖滑動切換
   let tx = null;
-  $('#lightbox').addEventListener('touchstart', (e) => { tx = e.touches[0].clientX; }, { passive: true });
+  $('#lightbox').addEventListener('touchstart', (e) => { tx = e.target.closest('video') ? null : e.touches[0].clientX; }, { passive: true });
   $('#lightbox').addEventListener('touchend', (e) => {
     if (tx === null) return; const dx = e.changedTouches[0].clientX - tx; tx = null;
     if (Math.abs(dx) > 50) lbStep(dx < 0 ? 1 : -1);

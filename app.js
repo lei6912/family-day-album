@@ -32,8 +32,8 @@
   const isOpen = (sel) => $(sel).classList.contains('open');
 
   /* ---------- 圖片網址（Google 雲端硬碟） ---------- */
-  const urlA = (f, w) => f.src || `https://lh3.googleusercontent.com/d/${f.id}=w${w}`;
-  const urlB = (f, w) => `https://drive.google.com/thumbnail?id=${f.id}&sz=w${w}`;
+  const urlA = (f, w) => f.src || (f.yt ? `https://i.ytimg.com/vi/${f.yt}/hqdefault.jpg` : `https://lh3.googleusercontent.com/d/${f.id}=w${w}`);
+  const urlB = (f, w) => f.yt ? `https://i.ytimg.com/vi/${f.yt}/mqdefault.jpg` : `https://drive.google.com/thumbnail?id=${f.id}&sz=w${w}`;
   function placeholder(f) {
     const label = f.type === 'video' ? '影片處理中' : '照片處理中';
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'><defs><radialGradient id='g' cx='.3' cy='.3'><stop offset='0' stop-color='#8fb4e0' stop-opacity='.7'/><stop offset='1' stop-color='#fffaf0'/></radialGradient></defs><rect width='400' height='300' fill='url(#g)'/>${f.type === 'video' ? '' : `<text x='200' y='160' text-anchor='middle' font-size='26' fill='#1f3f7a' font-family='serif'>${label}</text>`}</svg>`;
@@ -251,18 +251,30 @@
       const img = new Image(); img.alt = f.name; setImg(img, f, 2400); body.appendChild(img);
     } else if (f.src) {
       const v = document.createElement('video'); v.src = f.src; v.controls = true; v.style.maxHeight = '100%'; v.style.maxWidth = '100%'; body.appendChild(v);
+    } else if (f.yt) {
+      mountYouTube(f, body);
     } else if (!VKEY || state.lbPlayer === 'drive' || f.noNative) {
       mountDriveFrame(f, body);
     } else {
       mountNativeVideo(f, body);
     }
     const alt = $('#lbAltPlayer');
-    alt.hidden = !(f.type === 'video' && !f.src && VKEY);
+    alt.hidden = !(f.type === 'video' && !f.src && !f.yt && VKEY);
     alt.textContent = f.noNative ? '再試一次內建播放器' : state.lbPlayer === 'drive' ? '改用手機內建播放器' : '改用 Google 播放器';
     const list = visibleList(), pos = list.indexOf(state.lb);
-    $('#lbCaption').textContent = `${pos + 1} / ${list.length}　${fmtDate(f)}${f.by ? '　📷 ' + f.by : ''}${f.type === 'video' ? '　（剛上傳的影片需數分鐘處理才能播放）' : ''}`;
-    $('#lbDownload').href = f.src || `https://drive.google.com/uc?export=download&id=${f.id}`;
+    $('#lbCaption').textContent = `${pos + 1} / ${list.length}　${fmtDate(f)}${f.by ? '　📷 ' + f.by : ''}${f.type === 'video' && !f.yt ? '　（剛上傳的影片需數分鐘處理才能播放）' : ''}`;
+    $('#lbDownload').href = f.yt ? `https://youtu.be/${f.yt}` : (f.src || `https://drive.google.com/uc?export=download&id=${f.id}`);
+    $('#lbDownload').textContent = f.yt ? '在 YouTube 開啟' : '下載原檔';
     $('#lbPrev').disabled = pos <= 0; $('#lbNext').disabled = pos >= list.length - 1;
+  }
+  function mountYouTube(f, body) {
+    body.innerHTML = '';
+    const fr = document.createElement('iframe');
+    fr.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(f.yt)}?playsinline=1&rel=0&modestbranding=1`;
+    fr.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; fr.allowFullscreen = true;
+    fr.referrerPolicy = 'strict-origin-when-cross-origin';
+    if (f.h > f.w) fr.classList.add('portrait');
+    body.appendChild(fr);
   }
   // Google 雲端播放器（後備）：控制列由 Google 決定，無法調整
   function mountDriveFrame(f, body) {
@@ -455,6 +467,28 @@
       await refreshAfterUpload(ids);
     } else if (fails) toast('上傳失敗，請檢查網路後再試一次', 3500);
   }
+  const YT_RE = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/|v\/))([A-Za-z0-9_-]{11})/;
+  async function addYoutube() {
+    const url = $('#ytUrl').value.trim();
+    if (!YT_RE.test(url)) { toast('請貼上 YouTube 影片連結，例如 https://youtu.be/…'); $('#ytUrl').focus(); return; }
+    const uploader = $('#upName').value.trim();
+    const key = $('#upKey').value.trim();
+    localStorage.setItem('albumName', uploader);
+    if (key) localStorage.setItem('albumKey', key);
+    if (state.needKey && !key) { toast('請輸入上傳通關密語'); $('#upKey').focus(); return; }
+    const btn = $('#addYt'); btn.disabled = true; btn.textContent = '加入中…';
+    try {
+      const j = await apiPost({ action: 'youtube', url, uploader, key });
+      $('#ytUrl').value = '';
+      toast(j.duplicate ? '這支影片已經在相簿裡了' : '已加入 YouTube 影片，謝謝分享！', 3500);
+      await refreshAfterUpload([j.id]);
+    } catch (e) {
+      const m = e.message || '';
+      if (/BAD_KEY/.test(m)) { state.needKey = true; $('#keyField').hidden = false; localStorage.removeItem('albumKey'); toast('通關密語不正確'); }
+      else if (/unknown action/.test(m)) toast('相簿後端尚未更新，請管理者更新 Apps Script 後再試', 4500);
+      else toast(m.slice(0, 80) || '加入失敗，請稍後再試', 4500);
+    } finally { btn.disabled = false; btn.textContent = '加入'; }
+  }
   async function refreshAfterUpload(ids) {
     await loadData();
     $('#grid').dataset.built = '';
@@ -561,6 +595,8 @@
   ['dragleave', 'drop'].forEach((t) => dz.addEventListener(t, (e) => { e.preventDefault(); dz.classList.remove('drag'); }));
   dz.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
   $('#startUpload').addEventListener('click', startUpload);
+  $('#addYt').addEventListener('click', addYoutube);
+  $('#ytUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addYoutube(); } });
   $('#clearUpload').addEventListener('click', () => { if (state.uploading) return; queue = []; renderQueue(); });
   window.addEventListener('beforeunload', (e) => { if (state.uploading) { e.preventDefault(); e.returnValue = ''; } });
 

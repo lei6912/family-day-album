@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261108g">
+<link rel="stylesheet" href="style.css?v=20261108h">
 </head>
 <body>
 
@@ -123,6 +123,14 @@
       <small>可一次多選；電腦也可以直接拖曳進來</small>
     </label>
 
+    <div class="yt-add">
+      <span>或貼上 YouTube 影片連結（「公開」或「不公開」影片皆可）</span>
+      <div class="yt-row">
+        <input id="ytUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://youtu.be/…">
+        <button class="btn btn-primary" id="addYt">加入</button>
+      </div>
+    </div>
+
     <ul class="upload-list" id="uploadList"></ul>
     <p class="upload-note" id="uploadNote"></p>
 
@@ -165,8 +173,8 @@
 
 <div id="toast" class="toast" role="status"></div>
 
-<script src="config.js?v=20261108g"></script>
+<script src="config.js?v=20261108h"></script>
 <script src="assets/page-flip.browser.js"></script>
-<script src="app.js?v=20261108g"></script>
+<script src="app.js?v=20261108h"></script>
 </body>
 </html>

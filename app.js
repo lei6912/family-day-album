@@ -244,6 +244,7 @@
   function renderLightbox() {
     const f = state.files[state.lb]; if (!f) return;
     const body = $('#lbBody'); body.innerHTML = '';
+    const dg = $('#lbDiag'); if (dg) dg.remove();
     $('#lightbox').classList.toggle('is-video', f.type === 'video');
     if (f.type === 'image') {
       const img = new Image(); img.alt = f.name; setImg(img, f, 2400); body.appendChild(img);
@@ -284,10 +285,27 @@
       const alt = $('#lbAltPlayer'); alt.hidden = false; alt.textContent = '再試一次內建播放器';
       mountDriveFrame(f, body);
       toast(`內建播放器無法播放（${why}），已改用 Google 播放器`, 5000);
+      diagnose(v.src);
     };
     v.addEventListener('error', () => fallback('錯誤碼 ' + (v.error ? v.error.code : '?')));
     v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) fallback('只有聲音沒有畫面'); else settled = true; });
     body.appendChild(v);
+  }
+  // 播放失敗時檢查影片網址實際回應，結果顯示在畫面上方便判斷原因
+  async function diagnose(url) {
+    let msg;
+    try {
+      const r = await fetch(url, { headers: { Range: 'bytes=0-1' } });
+      if (r.ok) msg = `HTTP ${r.status}｜${r.headers.get('content-type') || '?'}｜金鑰正常`;
+      else {
+        let reason = '';
+        try { const j = await r.json(); const e = j.error || {}; reason = (e.details && e.details[0] && e.details[0].reason) || (e.errors && e.errors[0] && e.errors[0].reason) || e.status || e.message || ''; } catch (e) {}
+        msg = `HTTP ${r.status}｜${reason}`;
+      }
+    } catch (e) { msg = '連線失敗：' + (e && e.message); }
+    let d = $('#lbDiag');
+    if (!d) { d = document.createElement('div'); d.id = 'lbDiag'; d.style.cssText = 'position:absolute;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:3;background:#fff8e6;color:#7a3b00;border-radius:8px;padding:8px 10px;font:14px/1.4 system-ui;text-align:center'; $('#lightbox').appendChild(d); }
+    d.textContent = '診斷：' + msg;
   }
   function lbStep(d) {
     const list = visibleList(), pos = list.indexOf(state.lb), np = pos + d;

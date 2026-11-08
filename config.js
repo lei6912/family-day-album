@@ -6,5 +6,8 @@ window.ALBUM_CONFIG = {
   subtitle: '福智國中 · 國三忠班',
   date: '2026.11.08',
   place: '國立中正大學',
-  chunkMB: 5
+  chunkMB: 5,
+  // driveApiKey：Google Cloud「API 金鑰」（限 Drive API、限 lei6912.github.io）。
+  // 填了之後影片改用手機內建播放器播放；留空則用 Google 雲端播放器。
+  driveApiKey: ''
 };

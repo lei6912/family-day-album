@@ -5,6 +5,7 @@
   const qs = new URLSearchParams(location.search);
   if (qs.get('api')) localStorage.setItem('albumApi', qs.get('api'));
   let API = (CFG.apiUrl || localStorage.getItem('albumApi') || '').trim();
+  const VKEY = (CFG.driveApiKey || '').trim(); // 有金鑰才用手機內建播放器直接串流影片
   const CHUNK = Math.round((CFG.chunkMB || 5) * 4) * 256 * 1024; // 256KB 的倍數
 
   const $ = (s) => document.querySelector(s);
@@ -248,13 +249,13 @@
       const img = new Image(); img.alt = f.name; setImg(img, f, 2400); body.appendChild(img);
     } else if (f.src) {
       const v = document.createElement('video'); v.src = f.src; v.controls = true; v.style.maxHeight = '100%'; v.style.maxWidth = '100%'; body.appendChild(v);
-    } else if (state.lbPlayer === 'drive' || f.noNative) {
+    } else if (!VKEY || state.lbPlayer === 'drive' || f.noNative) {
       mountDriveFrame(f, body);
     } else {
       mountNativeVideo(f, body);
     }
     const alt = $('#lbAltPlayer');
-    alt.hidden = !(f.type === 'video' && !f.src);
+    alt.hidden = !(f.type === 'video' && !f.src && VKEY);
     alt.textContent = f.noNative ? '再試一次內建播放器' : state.lbPlayer === 'drive' ? '改用手機內建播放器' : '改用 Google 播放器';
     const list = visibleList(), pos = list.indexOf(state.lb);
     $('#lbCaption').textContent = `${pos + 1} / ${list.length}　${fmtDate(f)}${f.by ? '　📷 ' + f.by : ''}${f.type === 'video' ? '　（剛上傳的影片需數分鐘處理才能播放）' : ''}`;
@@ -275,7 +276,7 @@
     const v = document.createElement('video');
     v.controls = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'metadata';
     v.poster = urlB(f, 1280);
-    v.src = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(f.id)}&export=download&confirm=t`;
+    v.src = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}?alt=media&key=${encodeURIComponent(VKEY)}`;
     let settled = false;
     const fallback = (why) => {
       if (settled || !v.isConnected) return;

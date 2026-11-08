@@ -64,7 +64,8 @@
     if (!API) { state.files = []; state.loaded = true; updateCounts(); return; }
     try {
       const j = await apiGet('list');
-      state.files = j.files || [];
+      // 照片在前、影片在後；各自維持拍攝時間順序（sort 為穩定排序）
+      state.files = (j.files || []).slice().sort((a, b) => (a.type === 'video') - (b.type === 'video'));
       state.loadError = '';
     } catch (e) {
       console.error(e); state.loadError = '讀取雲端相簿失敗，請稍後重新整理';

@@ -14,7 +14,6 @@
 
 var FOLDER_NAME = '國三忠 家庭日 電子相簿 2026.11.08';
 var MAX_BYTES = 2 * 1024 * 1024 * 1024; // 單檔上限 2GB
-var YT_MIME = 'application/x-youtube-link'; // YouTube 連結以「空白檔案 + 屬性」存在相簿資料夾
 
 /** 在編輯器手動執行一次：建立資料夾並完成授權 */
 function setup() {
@@ -66,24 +65,13 @@ function listFiles_() {
   var pageToken = '';
   do {
     var url = 'https://www.googleapis.com/drive/v3/files?pageSize=1000' +
-      '&q=' + encodeURIComponent("'" + folder.getId() + "' in parents and trashed=false and (mimeType contains 'image/' or mimeType contains 'video/' or mimeType = '" + YT_MIME + "')") +
-      '&fields=' + encodeURIComponent('nextPageToken,files(id,name,mimeType,createdTime,description,size,appProperties,imageMediaMetadata(time,width,height,rotation),videoMediaMetadata(width,height,durationMillis))') +
+      '&q=' + encodeURIComponent("'" + folder.getId() + "' in parents and trashed=false and (mimeType contains 'image/' or mimeType contains 'video/')") +
+      '&fields=' + encodeURIComponent('nextPageToken,files(id,name,mimeType,createdTime,description,size,imageMediaMetadata(time,width,height,rotation),videoMediaMetadata(width,height,durationMillis))') +
       (pageToken ? '&pageToken=' + pageToken : '');
     var res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
     if (res.getResponseCode() !== 200) throw new Error('Drive list failed: ' + res.getContentText());
     var data = JSON.parse(res.getContentText());
     (data.files || []).forEach(function (f) {
-      if (f.mimeType === YT_MIME) {
-        var ap = f.appProperties || {};
-        if (!ap.yt) return;
-        var vert = ap.shorts === '1';
-        files.push({
-          id: f.id, yt: ap.yt, name: f.name, type: 'video', mime: YT_MIME,
-          taken: f.createdTime, uploaded: f.createdTime, by: f.description || '',
-          w: vert ? 720 : 1280, h: vert ? 1280 : 720, dur: 0
-        });
-        return;
-      }
       var meta = f.imageMediaMetadata || f.videoMediaMetadata || {};
       var w = meta.width, h = meta.height;
       if (f.imageMediaMetadata && (meta.rotation === 1 || meta.rotation === 3)) { var t = w; w = h; h = t; }
@@ -126,7 +114,6 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.action === 'init') return json_(initUpload_(body));
     if (body.action === 'chunk') return json_(uploadChunk_(body));
-    if (body.action === 'youtube') return json_(addYoutube_(body));
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err.message || err) });
@@ -188,45 +175,4 @@ function uploadChunk_(b) {
     return { ok: true, done: true, id: f.id };
   }
   throw new Error('chunk failed (' + code + '): ' + res.getContentText().slice(0, 300));
-}
-
-/** 新增 YouTube 影片連結（公開或「不公開」影片；私人影片無法嵌入） */
-function addYoutube_(b) {
-  checkKey_(b.key);
-  var url = String(b.url || '').trim();
-  var m = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/|v\/))([A-Za-z0-9_-]{11})/);
-  if (!m) throw new Error('這不是 YouTube 影片連結');
-  var id = m[1];
-  var vert = /\/shorts\//.test(url);
-
-  var o = UrlFetchApp.fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id), { muteHttpExceptions: true });
-  if (o.getResponseCode() !== 200) throw new Error('找不到這支影片，或影片設為「私人」。請改成「公開」或「不公開」後再試');
-  var info = JSON.parse(o.getContentText());
-  if (info.height > info.width) vert = true;
-
-  var folder = getFolder_();
-  var token = ScriptApp.getOAuthToken();
-  var q = "'" + folder.getId() + "' in parents and trashed=false and appProperties has { key='yt' and value='" + id + "' }";
-  var dup = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files?fields=files(id)&q=' + encodeURIComponent(q), { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
-  if (dup.getResponseCode() === 200) {
-    var have = JSON.parse(dup.getContentText()).files || [];
-    if (have.length) return { ok: true, id: have[0].id, duplicate: true };
-  }
-
-  var by = String(b.uploader || '').slice(0, 40);
-  var meta = {
-    name: String(info.title || 'YouTube 影片').slice(0, 150),
-    parents: [folder.getId()],
-    mimeType: YT_MIME,
-    appProperties: { yt: id, shorts: vert ? '1' : '0' }
-  };
-  if (by) meta.description = by;
-  var res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
-    method: 'post', contentType: 'application/json; charset=UTF-8',
-    headers: { Authorization: 'Bearer ' + token },
-    payload: JSON.stringify(meta), muteHttpExceptions: true
-  });
-  if (res.getResponseCode() !== 200) throw new Error('youtube add failed: ' + res.getContentText().slice(0, 300));
-  CacheService.getScriptCache().remove('list');
-  return { ok: true, id: JSON.parse(res.getContentText()).id };
 }

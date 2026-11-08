@@ -243,6 +243,7 @@
   function renderLightbox() {
     const f = state.files[state.lb]; if (!f) return;
     const body = $('#lbBody'); body.innerHTML = '';
+    $('#lightbox').classList.toggle('is-video', f.type === 'video');
     if (f.type === 'image') {
       const img = new Image(); img.alt = f.name; setImg(img, f, 2400); body.appendChild(img);
     } else if (f.src) {

@@ -396,6 +396,7 @@
     });
   }
   function showCover() {
+    if (document.body.classList.contains('immersive')) exitImmersive();
     $('#album').classList.remove('active');
     $('#splash').classList.add('active');
   }
@@ -411,10 +412,42 @@
   $('#closeUpload').addEventListener('click', () => { if (state.uploading && !confirm('還在上傳中，確定要關閉嗎？（上傳會繼續在背景進行）')) return; closeOverlay('#uploadDialog'); });
   $('#closeSetup').addEventListener('click', () => closeOverlay('#setupDialog'));
   $('#dismissRotate').addEventListener('click', () => closeOverlay('#rotateHint'));
-  $('#fsLandscape').addEventListener('click', async () => {
-    try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch (e) { toast('此裝置不支援自動轉向，請手動將手機轉為橫向'); }
-    closeOverlay('#rotateHint');
-  });
+  $('#fsLandscape').addEventListener('click', () => { closeOverlay('#rotateHint'); enterImmersive(true); });
+
+  /* ---------- 全螢幕觀賞 ---------- */
+  const DE = document.documentElement;
+  const canFS = !!(DE.requestFullscreen || DE.webkitRequestFullscreen);
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const isStandalone = () => navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  function relayout() {
+    clearTimeout(relayout.t);
+    relayout.t = setTimeout(() => { if ($('#album').classList.contains('active') && state.pf) buildBook(state.pf.getCurrentPageIndex()); }, 320);
+  }
+  async function enterImmersive(landscape) {
+    document.body.classList.add('immersive');
+    if (canFS && !fsEl()) {
+      try { if (DE.requestFullscreen) await DE.requestFullscreen({ navigationUI: 'hide' }); else DE.webkitRequestFullscreen(); } catch (e) {}
+    }
+    if (landscape) {
+      try { await screen.orientation.lock('landscape'); } catch (e) { toast('此裝置不支援自動轉向，請手動將手機轉為橫向'); }
+    } else if (!canFS && !isStandalone()) {
+      let seen = false; try { seen = !!localStorage.getItem('fsTip'); localStorage.setItem('fsTip', '1'); } catch (e) {}
+      if (!seen) toast('小技巧：Safari 按「分享 → 加入主畫面」，從主畫面開啟就沒有網址列，畫面更大', 6000);
+    }
+    relayout();
+  }
+  function exitImmersive() {
+    document.body.classList.remove('immersive');
+    try { screen.orientation.unlock(); } catch (e) {}
+    if (fsEl()) { try { const p = (document.exitFullscreen || document.webkitExitFullscreen).call(document); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+    relayout();
+  }
+  $('#openFull').addEventListener('click', () => enterImmersive(false));
+  $('#exitFull').addEventListener('click', exitImmersive);
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach((t) => document.addEventListener(t, () => {
+    // 使用者用系統手勢 / Esc 離開全螢幕時，一併恢復工具列
+    if (!fsEl() && document.body.classList.contains('immersive')) { document.body.classList.remove('immersive'); relayout(); }
+  }));
   document.querySelectorAll('.grid-filters .chip').forEach((c) => c.addEventListener('click', () => { state.filter = c.dataset.filter; applyFilter(); }));
   $('#grid').addEventListener('click', (e) => { const t = e.target.closest('.tile'); if (t) openLightbox(+t.dataset.i); });
   $('#lbClose').addEventListener('click', closeLightbox);
@@ -461,8 +494,14 @@
       if (e.key === 'ArrowLeft') lbStep(-1); else if (e.key === 'ArrowRight') lbStep(1); else if (e.key === 'Escape') closeLightbox();
       return;
     }
-    if (e.key === 'Escape') { ['#gridView', '#uploadDialog', '#setupDialog', '#rotateHint'].forEach((s) => isOpen(s) && !state.uploading && closeOverlay(s)); return; }
+    if (e.key === 'Escape') {
+      const open = ['#gridView', '#uploadDialog', '#setupDialog', '#rotateHint'].filter(isOpen);
+      if (open.length) open.forEach((s) => !state.uploading && closeOverlay(s));
+      else if (document.body.classList.contains('immersive')) exitImmersive();
+      return;
+    }
     if (!$('#album').classList.contains('active') || !state.pf) return;
+    if (e.key === 'f' || e.key === 'F') { document.body.classList.contains('immersive') ? exitImmersive() : enterImmersive(false); return; }
     if (e.key === 'ArrowLeft') state.pf.flipPrev(); else if (e.key === 'ArrowRight') state.pf.flipNext();
   });
 

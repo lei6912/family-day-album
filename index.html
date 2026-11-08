@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#f6efe2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>中正大學 國三忠 家庭日｜電子相簿</title>
+<meta name="description" content="2026.11.08 福智國中國三忠班 中正大學家庭日電子相簿，歡迎上傳分享照片與影片。">
+<meta property="og:title" content="中正大學 國三忠 家庭日｜電子相簿">
+<meta property="og:description" content="2026.11.08 一起翻閱這一天的回憶，也歡迎上傳你拍的照片與影片！">
+<meta property="og:image" content="https://lei6912.github.io/family-day-album/assets/og.jpg">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📖%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 水彩紙張濾鏡 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="wc-edge">
+    <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7"/>
+    <feDisplacementMap in="SourceGraphic" scale="9"/>
+  </filter>
+</svg>
+
+<!-- ① 封面 -->
+<section id="splash" class="screen active">
+  <div class="splash-inner">
+    <img class="splash-cover" src="assets/cover.jpg" alt="中正大學 國三忠 家庭日 2026.11.08 全體合照">
+    <div class="splash-actions">
+      <button id="openBook" class="btn btn-primary btn-lg">
+        <svg viewBox="0 0 24 24"><path d="M3 5.5C5.5 4 8.5 4 12 6c3.5-2 6.5-2 9-.5V19c-2.5-1.5-5.5-1.5-9 .5-3.5-2-6.5-2-9-.5z"/><path d="M12 6v13.5"/></svg>
+        翻開相簿
+      </button>
+      <p id="splashCount" class="splash-count">正在整理照片…</p>
+    </div>
+  </div>
+</section>
+
+<!-- ② 相簿 -->
+<section id="album" class="screen">
+  <header class="topbar">
+    <button class="btn btn-ghost" id="toCover" title="回封面">
+      <svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg><span>封面</span>
+    </button>
+    <h1 class="topbar-title"><span class="ink">國三忠</span> 家庭日 <small>電子相簿</small></h1>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="openGrid" title="一鍵展開全部照片與影片">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>展開全部</span>
+      </button>
+      <button class="btn btn-primary" id="openUpload" title="上傳照片或影片">
+        <svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-3"/></svg><span>上傳</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="book-wrap" id="bookWrap"></div>
+    <button class="nav-arrow prev" id="prevPage" aria-label="上一頁"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button class="nav-arrow next" id="nextPage" aria-label="下一頁"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+  </div>
+  <div class="pager"><span id="pageInfo">封面</span></div>
+</section>
+
+<!-- ③ 一鍵展開 -->
+<section id="gridView" class="overlay" aria-hidden="true">
+  <header class="grid-head">
+    <h2>全部照片與影片 <span id="gridCount" class="muted"></span></h2>
+    <div class="grid-filters" role="tablist">
+      <button class="chip active" data-filter="all">全部</button>
+      <button class="chip" data-filter="image">照片</button>
+      <button class="chip" data-filter="video">影片</button>
+    </div>
+    <button class="btn btn-ghost icon-only" id="closeGrid" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </header>
+  <div class="grid" id="grid"></div>
+</section>
+
+<!-- ④ 大圖 / 影片檢視 -->
+<section id="lightbox" class="overlay lightbox" aria-hidden="true">
+  <button class="lb-close" id="lbClose" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <button class="lb-arrow prev" id="lbPrev" aria-label="上一張"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <div class="lb-body" id="lbBody"></div>
+  <button class="lb-arrow next" id="lbNext" aria-label="下一張"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+  <footer class="lb-foot">
+    <span id="lbCaption"></span>
+    <span class="lb-links">
+      <button class="btn btn-ghost btn-sm" id="lbToBook">在相簿中翻到這頁</button>
+      <a class="btn btn-ghost btn-sm" id="lbDownload" target="_blank" rel="noopener">下載原檔</a>
+    </span>
+  </footer>
+</section>
+
+<!-- ⑤ 上傳 -->
+<section id="uploadDialog" class="overlay modal" aria-hidden="true">
+  <div class="card">
+    <button class="btn btn-ghost icon-only card-close" id="closeUpload" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h2 class="brush">分享你的照片與影片</h2>
+    <p class="muted">檔案會存進相簿的 Google 雲端硬碟，上傳後所有人都能在相簿裡看到。</p>
+
+    <label class="field">
+      <span>你的稱呼（會顯示在照片旁）</span>
+      <input id="upName" type="text" maxlength="30" placeholder="例如：詠安爸爸">
+    </label>
+    <label class="field" id="keyField" hidden>
+      <span>上傳通關密語</span>
+      <input id="upKey" type="text" autocomplete="off" placeholder="請向班級家長群組詢問">
+    </label>
+
+    <label class="dropzone" id="dropzone">
+      <input id="fileInput" type="file" accept="image/*,video/*" multiple>
+      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>
+      <strong>點這裡選擇照片 / 影片</strong>
+      <small>可一次多選；電腦也可以直接拖曳進來</small>
+    </label>
+
+    <ul class="upload-list" id="uploadList"></ul>
+    <p class="upload-note" id="uploadNote"></p>
+
+    <div class="card-actions">
+      <button class="btn btn-ghost" id="clearUpload">清除</button>
+      <button class="btn btn-primary" id="startUpload" disabled>開始上傳</button>
+    </div>
+  </div>
+</section>
+
+<!-- ⑥ 連接雲端（尚未設定時） -->
+<section id="setupDialog" class="overlay modal" aria-hidden="true">
+  <div class="card">
+    <button class="btn btn-ghost icon-only card-close" id="closeSetup" aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h2 class="brush">連接 Google 雲端硬碟</h2>
+    <p class="muted">相簿還沒連上存放照片的雲端硬碟。請管理者把 Apps Script 部署後的「網頁應用程式網址」貼在下方。</p>
+    <label class="field">
+      <span>網頁應用程式網址（…/exec）</span>
+      <input id="apiInput" type="url" placeholder="https://script.google.com/macros/s/……/exec">
+    </label>
+    <div class="card-actions">
+      <button class="btn btn-primary" id="saveApi">連接</button>
+    </div>
+  </div>
+</section>
+
+<!-- ⑦ 橫式提示 -->
+<section id="rotateHint" class="overlay modal" aria-hidden="true">
+  <div class="card center">
+    <div class="phone-anim" aria-hidden="true"><div class="phone"></div></div>
+    <h2 class="brush">建議橫式觀賞</h2>
+    <p>把手機轉成<strong>橫向</strong>，就能像真的相簿一樣左右兩頁一起翻閱。</p>
+    <p class="muted small">記得先關閉手機的「螢幕方向鎖定」。左右滑動或點書頁邊緣即可翻頁。</p>
+    <div class="card-actions center">
+      <button class="btn btn-ghost" id="fsLandscape" hidden>全螢幕橫向</button>
+      <button class="btn btn-primary" id="dismissRotate">我知道了</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script src="assets/page-flip.browser.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

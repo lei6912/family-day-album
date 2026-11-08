@@ -264,6 +264,8 @@ body.immersive .stage { padding: 6px 56px; }
   #lightbox.is-video .lb-arrow.next { left: calc(62px + var(--sal)); right: auto; }
 }
 .lb-body video { width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: 4px; }
+#lbDiag { position: absolute; left: 12px; right: 12px; top: calc(64px + var(--sat)); z-index: 3; background: #fff8e6; color: #7a3b00; border-radius: 8px; padding: 8px 10px; font: 14px/1.4 system-ui, sans-serif; text-align: center; }
+.lb-wait b { font-size: 1.4em; color: #fff; }
 .lb-close { position: absolute; top: calc(10px + var(--sat)); right: calc(12px + var(--sar)); }
 .lb-close, .lb-arrow { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, .5); background: rgba(255, 255, 255, .1); color: #fff; display: grid; place-items: center; z-index: 2; }
 .lb-arrow { position: absolute; top: 50%; transform: translateY(-50%); }

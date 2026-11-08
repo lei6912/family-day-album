@@ -243,6 +243,7 @@
   function openLightbox(i) { state.lb = i; renderLightbox(); openOverlay('#lightbox'); }
   function renderLightbox() {
     const f = state.files[state.lb]; if (!f) return;
+    releaseLbMedia();
     const body = $('#lbBody'); body.innerHTML = '';
     const dg = $('#lbDiag'); if (dg) dg.remove();
     $('#lightbox').classList.toggle('is-video', f.type === 'video');
@@ -272,47 +273,79 @@
     if (f.h > f.w) fr.classList.add('portrait');
     body.appendChild(fr);
   }
-  // 手機內建播放器：直接串流原檔，控制列會自動隱藏、可原生全螢幕；播不了就自動改用 Google 播放器
-  function mountNativeVideo(f, body) {
+  const driveMediaUrl = (f) => `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}?alt=media&key=${encodeURIComponent(VKEY)}`;
+  function releaseLbMedia() {
+    if (state.lbAbort) { try { state.lbAbort.abort(); } catch (e) {} state.lbAbort = null; }
+    if (state.lbBlob) { URL.revokeObjectURL(state.lbBlob); state.lbBlob = null; }
+  }
+  function makeVideo(f, src) {
     const v = document.createElement('video');
     v.controls = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'metadata';
-    v.poster = urlB(f, 1280);
-    v.src = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}?alt=media&key=${encodeURIComponent(VKEY)}`;
+    v.poster = urlB(f, 1280); v.src = src;
+    return v;
+  }
+  function showDiag(msg) {
+    let d = $('#lbDiag');
+    if (!d) { d = document.createElement('div'); d.id = 'lbDiag'; $('#lightbox').appendChild(d); }
+    d.textContent = '診斷：' + msg;
+  }
+  function useDriveFallback(f, body, msg) {
+    f.noNative = true;
+    const alt = $('#lbAltPlayer'); alt.hidden = false; alt.textContent = '再試一次內建播放器';
+    mountDriveFrame(f, body);
+    showDiag(msg);
+  }
+  // 手機內建播放器：先直接串流；iPhone 不接受時改成「先下載整支影片再播放」；都不行才用 Google 播放器
+  function mountNativeVideo(f, body) {
+    const v = makeVideo(f, driveMediaUrl(f));
     let settled = false;
-    const fallback = (why) => {
+    const fail = (why) => {
       if (settled || !v.isConnected) return;
-      settled = true; f.noNative = true;
-      const alt = $('#lbAltPlayer'); alt.hidden = false; alt.textContent = '再試一次內建播放器';
-      mountDriveFrame(f, body);
-      toast(`內建播放器無法播放（${why}），已改用 Google 播放器`, 5000);
-      diagnose(v.src);
+      settled = true; mountBlobVideo(f, body, why);
     };
-    v.addEventListener('error', () => fallback('錯誤碼 ' + (v.error ? v.error.code : '?')));
-    v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) fallback('只有聲音沒有畫面'); else settled = true; });
+    v.addEventListener('error', () => fail('串流錯誤碼 ' + (v.error ? v.error.code : '?')));
+    v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) fail('只有聲音沒有畫面'); else settled = true; });
     body.appendChild(v);
   }
-  // 播放失敗時檢查影片網址實際回應，結果顯示在畫面上方便判斷原因
-  async function diagnose(url) {
-    let msg;
+  async function mountBlobVideo(f, body, why) {
+    releaseLbMedia();
+    const idx = state.lb, ctrl = new AbortController(); state.lbAbort = ctrl;
+    body.innerHTML = '<div class="lb-wait">影片載入中… <b>0%</b><br><small>第一次播放需要先下載整支影片，請稍候</small></div>';
+    const pct = body.querySelector('b');
     try {
-      const r = await fetch(url, { headers: { Range: 'bytes=0-1' } });
-      if (r.ok) msg = `HTTP ${r.status}｜${r.headers.get('content-type') || '?'}｜金鑰正常`;
-      else {
+      const r = await fetch(driveMediaUrl(f), { signal: ctrl.signal });
+      if (!r.ok) {
         let reason = '';
         try { const j = await r.json(); const e = j.error || {}; reason = (e.details && e.details[0] && e.details[0].reason) || (e.errors && e.errors[0] && e.errors[0].reason) || e.status || e.message || ''; } catch (e) {}
-        msg = `HTTP ${r.status}｜${reason}`;
+        throw new Error(`HTTP ${r.status}｜${reason}`);
       }
-    } catch (e) { msg = '連線失敗：' + (e && e.message); }
-    let d = $('#lbDiag');
-    if (!d) { d = document.createElement('div'); d.id = 'lbDiag'; d.style.cssText = 'position:absolute;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:3;background:#fff8e6;color:#7a3b00;border-radius:8px;padding:8px 10px;font:14px/1.4 system-ui;text-align:center'; $('#lightbox').appendChild(d); }
-    d.textContent = '診斷：' + msg;
+      const total = +r.headers.get('content-length') || 0;
+      const type = f.mime || r.headers.get('content-type') || 'video/mp4';
+      const chunks = []; let got = 0;
+      if (r.body && r.body.getReader) {
+        const rd = r.body.getReader();
+        for (;;) {
+          const { done, value } = await rd.read(); if (done) break;
+          chunks.push(value); got += value.length;
+          pct.textContent = total ? Math.floor(got / total * 100) + '%' : (got / 1048576).toFixed(1) + ' MB';
+        }
+      } else chunks.push(await r.arrayBuffer());
+      if (state.lb !== idx || ctrl.signal.aborted) return;
+      const url = URL.createObjectURL(new Blob(chunks, { type })); state.lbBlob = url; state.lbAbort = null;
+      const v = makeVideo(f, url);
+      v.addEventListener('error', () => { if (v.isConnected) useDriveFallback(f, body, `${why}；下載後仍無法播放（錯誤碼 ${v.error ? v.error.code : '?'}）`); });
+      body.innerHTML = ''; body.appendChild(v);
+    } catch (e) {
+      if (ctrl.signal.aborted || state.lb !== idx) return;
+      useDriveFallback(f, body, `${why}；下載失敗 ${e && e.message ? e.message : e}`);
+    }
   }
   function lbStep(d) {
     const list = visibleList(), pos = list.indexOf(state.lb), np = pos + d;
     if (np < 0 || np >= list.length) return;
     state.lb = list[np]; renderLightbox();
   }
-  function closeLightbox() { closeOverlay('#lightbox'); $('#lbBody').innerHTML = ''; }
+  function closeLightbox() { releaseLbMedia(); closeOverlay('#lightbox'); $('#lbBody').innerHTML = ''; const d = $('#lbDiag'); if (d) d.remove(); }
 
   /* ---------- 上傳 ---------- */
   let queue = [];

@@ -254,8 +254,8 @@
       mountNativeVideo(f, body);
     }
     const alt = $('#lbAltPlayer');
-    alt.hidden = !(f.type === 'video' && !f.src && !f.noNative);
-    alt.textContent = state.lbPlayer === 'drive' ? '改用手機內建播放器' : '改用 Google 播放器';
+    alt.hidden = !(f.type === 'video' && !f.src);
+    alt.textContent = f.noNative ? '再試一次內建播放器' : state.lbPlayer === 'drive' ? '改用手機內建播放器' : '改用 Google 播放器';
     const list = visibleList(), pos = list.indexOf(state.lb);
     $('#lbCaption').textContent = `${pos + 1} / ${list.length}　${fmtDate(f)}${f.by ? '　📷 ' + f.by : ''}${f.type === 'video' ? '　（剛上傳的影片需數分鐘處理才能播放）' : ''}`;
     $('#lbDownload').href = f.src || `https://drive.google.com/uc?export=download&id=${f.id}`;
@@ -277,14 +277,15 @@
     v.poster = urlB(f, 1280);
     v.src = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(f.id)}&export=download&confirm=t`;
     let settled = false;
-    const fallback = () => {
+    const fallback = (why) => {
       if (settled || !v.isConnected) return;
       settled = true; f.noNative = true;
-      $('#lbAltPlayer').hidden = true;
+      const alt = $('#lbAltPlayer'); alt.hidden = false; alt.textContent = '再試一次內建播放器';
       mountDriveFrame(f, body);
+      toast(`內建播放器無法播放（${why}），已改用 Google 播放器`, 5000);
     };
-    v.addEventListener('error', fallback);
-    v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) fallback(); else settled = true; });
+    v.addEventListener('error', () => fallback('錯誤碼 ' + (v.error ? v.error.code : '?')));
+    v.addEventListener('loadedmetadata', () => { if (!v.videoWidth) fallback('只有聲音沒有畫面'); else settled = true; });
     body.appendChild(v);
   }
   function lbStep(d) {
@@ -483,7 +484,9 @@
   $('#lbPrev').addEventListener('click', () => lbStep(-1));
   $('#lbNext').addEventListener('click', () => lbStep(1));
   $('#lbAltPlayer').addEventListener('click', () => {
-    state.lbPlayer = state.lbPlayer === 'drive' ? 'native' : 'drive';
+    const f = state.files[state.lb];
+    if (f && f.noNative) { f.noNative = false; state.lbPlayer = 'native'; }
+    else state.lbPlayer = state.lbPlayer === 'drive' ? 'native' : 'drive';
     renderLightbox();
   });
   $('#lbToBook').addEventListener('click', () => {
